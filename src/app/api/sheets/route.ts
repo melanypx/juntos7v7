@@ -21,9 +21,10 @@ export async function GET() {
       },
     });
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error('[sheets] Error al leer el Sheet:', err);
     return NextResponse.json(
-      { error: 'Error al leer el Google Sheet' },
+      { error: 'Error al leer el Google Sheet', detail: msg },
       { status: 500 }
     );
   }

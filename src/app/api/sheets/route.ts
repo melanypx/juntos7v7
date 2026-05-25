@@ -15,21 +15,28 @@ export async function GET() {
 
   const meta = (user.user_metadata ?? {}) as UserMetadata;
   const role = meta.role ?? 'viewer';
-  const linea = meta.linea_presupuestaria?.trim();
+  const raw = meta.linea_presupuestaria;
+  const lineas: string[] = Array.isArray(raw)
+    ? raw.map((l) => l.trim()).filter(Boolean)
+    : raw
+    ? [raw.trim()].filter(Boolean)
+    : [];
 
   try {
     const data = await getSheetData();
 
-    // Admin: ve todo. Viewer: solo su línea (o nada si no tiene línea asignada).
+    // Admin: ve todo. Viewer: solo sus líneas (o nada si no tiene asignadas).
     let filtered = data;
     if (role !== 'admin') {
-      if (!linea) {
-        filtered = []; // viewer sin línea → no ve nada
+      if (lineas.length === 0) {
+        filtered = []; // viewer sin líneas → no ve nada
       } else {
-        // Match por prefijo: "019" matchea "019-01-01", "019" solo, etc.
         filtered = data.filter((row) =>
-          row.lineaPresupuestaria === linea ||
-          row.lineaPresupuestaria.startsWith(linea + '-')
+          lineas.some(
+            (l) =>
+              row.lineaPresupuestaria === l ||
+              row.lineaPresupuestaria.startsWith(l + '-')
+          )
         );
       }
     }

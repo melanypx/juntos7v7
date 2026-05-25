@@ -30,7 +30,9 @@ export type UserRole = 'admin' | 'viewer';
 
 export interface UserMetadata {
   role: UserRole;
-  linea_presupuestaria?: string;
+  // Puede ser un string ("019") o un array (["020","023-05"]).
+  // El match es por prefijo: "008" deja ver "008-01-01", "008-02-01", etc.
+  linea_presupuestaria?: string | string[];
 }
 
 export interface BudgetLine {

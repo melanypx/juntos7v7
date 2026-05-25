@@ -13,7 +13,11 @@ export default async function DashboardPage() {
 
   const meta = (user.user_metadata ?? {}) as UserMetadata;
   const role = meta.role ?? 'viewer';
-  const linea = meta.linea_presupuestaria;
+  // Solo prellena/bloquea el filtro si hay UNA sola línea asignada.
+  // Si hay varias, el filtro queda libre dentro de las que tiene acceso.
+  const linea = typeof meta.linea_presupuestaria === 'string'
+    ? meta.linea_presupuestaria
+    : undefined;
 
   return (
     <DashboardShell

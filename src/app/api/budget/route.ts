@@ -15,18 +15,23 @@ export async function GET() {
 
   const meta = (user.user_metadata ?? {}) as UserMetadata;
   const role = meta.role ?? 'viewer';
-  const linea = meta.linea_presupuestaria?.trim();
+  const raw = meta.linea_presupuestaria;
+  const lineas: string[] = Array.isArray(raw)
+    ? raw.map((l) => l.trim()).filter(Boolean)
+    : raw
+    ? [raw.trim()].filter(Boolean)
+    : [];
 
   try {
     const data = await getBudgetData();
 
     let filtered = data;
     if (role !== 'admin') {
-      if (!linea) {
+      if (lineas.length === 0) {
         filtered = [];
       } else {
         filtered = data.filter((b) =>
-          b.codigo === linea || b.codigo.startsWith(linea + '-')
+          lineas.some((l) => b.codigo === l || b.codigo.startsWith(l + '-'))
         );
       }
     }

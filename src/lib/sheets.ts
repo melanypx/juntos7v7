@@ -8,6 +8,20 @@ function parseMonto(value: string): number {
   return parseInt(clean, 10) || 0;
 }
 
+export async function getSheetHeaders(): Promise<string[]> {
+  const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON!);
+  const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+  });
+  const sheets = google.sheets({ version: 'v4', auth });
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID!,
+    range: process.env.GOOGLE_SHEET_RANGE ?? 'A:Y',
+  });
+  return (res.data.values?.[0] ?? []) as string[];
+}
+
 export async function getSheetData(): Promise<SheetRow[]> {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON!);
 

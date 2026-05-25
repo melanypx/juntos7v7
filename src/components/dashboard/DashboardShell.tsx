@@ -56,11 +56,9 @@ export default function DashboardShell({ userEmail, role, lineaFiltro }: Props) 
   }
 
   // Opciones únicas para cada filtro (computed from full dataset)
-  const estados = [...new Set(rows.map((r) => r.estado).filter(Boolean))].sort();
-  const lineas = [
-    ...new Set(rows.map((r) => r.lineaPresupuestaria).filter(Boolean)),
-  ].sort();
-  const meses = [...new Set(rows.map((r) => r.mes).filter(Boolean))];
+  const estados = Array.from(new Set(rows.map((r) => r.estado).filter(Boolean))).sort();
+  const lineas = Array.from(new Set(rows.map((r) => r.lineaPresupuestaria).filter(Boolean))).sort();
+  const meses = Array.from(new Set(rows.map((r) => r.mes).filter(Boolean)));
 
   // Filas filtradas
   const filtered = rows.filter((r) => {

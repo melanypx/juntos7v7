@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { SheetRow, BudgetLine } from '@/lib/types';
+import { exportToCSV } from '@/lib/export-csv';
 
 interface Props {
   rows: SheetRow[];
@@ -280,6 +281,51 @@ export default function BudgetBreakdown({ rows }: Props) {
     setExpanded(new Set());
   }
 
+  function exportTree() {
+    // Aplana el árbol respetando el orden y la jerarquía
+    interface FlatRow {
+      nivel: number;
+      codigo: string;
+      descripcion: string;
+      presupuestado: number;
+      ejecutado: number;
+      disponible: number;
+      pctUso: string;
+    }
+    const flat: FlatRow[] = [];
+    function walk(n: TreeNode) {
+      flat.push({
+        nivel: n.level,
+        codigo: n.codigo,
+        descripcion: n.descripcion,
+        presupuestado: n.presupuesto,
+        ejecutado: n.ejecutado,
+        disponible: n.presupuesto - n.ejecutado,
+        pctUso:
+          n.presupuesto > 0
+            ? ((n.ejecutado / n.presupuesto) * 100).toFixed(1) + '%'
+            : '—',
+      });
+      for (const c of n.children) walk(c);
+    }
+    for (const t of tree) walk(t);
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    exportToCSV<FlatRow>(
+      flat,
+      [
+        { key: 'nivel',         label: 'Nivel' },
+        { key: 'codigo',        label: 'Código' },
+        { key: 'descripcion',   label: 'Descripción' },
+        { key: 'presupuestado', label: 'Presupuestado' },
+        { key: 'ejecutado',     label: 'Ejecutado' },
+        { key: 'disponible',    label: 'Disponible' },
+        { key: 'pctUso',        label: '% Uso' },
+      ],
+      `presupuesto-${stamp}.csv`
+    );
+  }
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -301,6 +347,21 @@ export default function BudgetBreakdown({ rows }: Props) {
             type="button"
           >
             Colapsar
+          </button>
+          <button
+            type="button"
+            onClick={exportTree}
+            disabled={tree.length === 0}
+            className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium
+                       hover:bg-blue-700 transition-colors disabled:opacity-40
+                       disabled:cursor-not-allowed flex items-center gap-1.5"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Exportar CSV
           </button>
         </div>
       </div>

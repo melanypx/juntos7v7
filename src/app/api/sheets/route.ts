@@ -43,7 +43,9 @@ export async function GET() {
 
     return NextResponse.json(filtered, {
       headers: {
-        'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
+        // Cache PRIVADO (no compartido entre usuarios). Sin esto, el CDN
+        // podría servir la respuesta filtrada de un usuario a otro distinto.
+        'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
       },
     });
   } catch (err) {

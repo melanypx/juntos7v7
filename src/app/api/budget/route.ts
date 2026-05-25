@@ -38,7 +38,7 @@ export async function GET() {
 
     return NextResponse.json(filtered, {
       headers: {
-        'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
+        'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
       },
     });
   } catch (err) {

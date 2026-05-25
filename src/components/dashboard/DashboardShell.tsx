@@ -17,12 +17,15 @@ interface Props {
 
 const REFRESH_MS = 5 * 60 * 1000;
 
+type Tab = 'resumen' | 'presupuesto' | 'ocs';
+
 export default function DashboardShell({ userEmail, role, lineaFiltro }: Props) {
   const router = useRouter();
   const [rows, setRows] = useState<SheetRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [tab, setTab] = useState<Tab>('resumen');
 
   // Filtros activos
   const [filterEstado, setFilterEstado] = useState('');
@@ -55,18 +58,24 @@ export default function DashboardShell({ userEmail, role, lineaFiltro }: Props) 
     router.push('/login');
   }
 
-  // Opciones únicas para cada filtro (computed from full dataset)
+  // Opciones únicas para cada filtro
   const estados = Array.from(new Set(rows.map((r) => r.estado).filter(Boolean))).sort();
   const lineas = Array.from(new Set(rows.map((r) => r.lineaPresupuestaria).filter(Boolean))).sort();
   const meses = Array.from(new Set(rows.map((r) => r.mes).filter(Boolean)));
 
-  // Filas filtradas
+  // Filas filtradas (filtros del cliente — el filtro por rol/línea es server-side)
   const filtered = rows.filter((r) => {
     if (filterEstado && r.estado !== filterEstado) return false;
     if (filterLinea && r.lineaPresupuestaria !== filterLinea) return false;
     if (filterMes && r.mes !== filterMes) return false;
     return true;
   });
+
+  const tabs: { key: Tab; label: string; icon: string }[] = [
+    { key: 'resumen',     label: 'Resumen',     icon: '📊' },
+    { key: 'presupuesto', label: 'Presupuesto', icon: '💰' },
+    { key: 'ocs',         label: 'Detalle OCs', icon: '📋' },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -100,6 +109,24 @@ export default function DashboardShell({ userEmail, role, lineaFiltro }: Props) 
             </button>
           </div>
         </div>
+
+        {/* Tabs */}
+        <div className="max-w-7xl mx-auto mt-4 flex gap-1 border-b border-gray-200 -mb-4">
+          {tabs.map(({ key, label, icon }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                tab === key
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <span className="mr-1.5">{icon}</span>
+              {label}
+            </button>
+          ))}
+        </div>
       </header>
 
       {/* ── Contenido principal ─────────────────────────────────────────── */}
@@ -119,10 +146,10 @@ export default function DashboardShell({ userEmail, role, lineaFiltro }: Props) 
           </div>
         ) : (
           <>
-            {/* KPIs */}
+            {/* KPIs siempre visibles arriba */}
             <KPICards rows={filtered} />
 
-            {/* Filtros */}
+            {/* Filtros siempre visibles */}
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
                 Filtros
@@ -152,7 +179,6 @@ export default function DashboardShell({ userEmail, role, lineaFiltro }: Props) 
                   <select
                     value={filterLinea}
                     onChange={(e) => setFilterLinea(e.target.value)}
-                    // Los viewers con línea asignada no pueden cambiar el filtro
                     disabled={role === 'viewer' && !!lineaFiltro}
                     className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2
                                focus:outline-none focus:ring-2 focus:ring-blue-500
@@ -186,14 +212,10 @@ export default function DashboardShell({ userEmail, role, lineaFiltro }: Props) 
               </div>
             </div>
 
-            {/* Gráfico de barras por mes */}
-            <Charts rows={filtered} />
-
-            {/* Desglose presupuesto vs ejecución */}
-            <BudgetBreakdown rows={filtered} />
-
-            {/* Tabla */}
-            <DataTable rows={filtered} role={role} />
+            {/* Contenido de pestaña */}
+            {tab === 'resumen' && <Charts rows={filtered} />}
+            {tab === 'presupuesto' && <BudgetBreakdown rows={filtered} />}
+            {tab === 'ocs' && <DataTable rows={filtered} role={role} />}
           </>
         )}
       </main>

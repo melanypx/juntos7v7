@@ -21,7 +21,9 @@ function formatCLP(n: number) {
   });
 }
 
-const VIEWER_COLUMNS: Column[] = [
+// Todas las columnas — mismas vistas para admin y viewer; los viewers solo
+// ven las filas que coincidan con su línea presupuestaria (filtrado server-side).
+const ALL_COLUMNS: Column[] = [
   { key: 'estado',              label: 'Estado' },
   { key: 'lineaPresupuestaria', label: 'Línea' },
   { key: 'mes',                 label: 'Mes' },
@@ -30,15 +32,12 @@ const VIEWER_COLUMNS: Column[] = [
   { key: 'proveedor',           label: 'Proveedor' },
   { key: 'monto',               label: 'Monto' },
   { key: 'descripcion',         label: 'Descripción' },
-];
-
-const ADMIN_EXTRA_COLUMNS: Column[] = [
-  { key: 'tipoDocumento', label: 'Tipo doc.' },
-  { key: 'nroDocumento',  label: 'Nro doc.' },
-  { key: 'fechaFactura',  label: 'Fecha factura' },
-  { key: 'linkOC',        label: 'Link OC' },
-  { key: 'linkFactura',   label: 'Link factura' },
-  { key: 'linkPago',      label: 'Link pago' },
+  { key: 'tipoDocumento',       label: 'Tipo doc.' },
+  { key: 'nroDocumento',        label: 'Nro doc.' },
+  { key: 'fechaFactura',        label: 'Fecha factura' },
+  { key: 'linkOC',              label: 'Link OC' },
+  { key: 'linkFactura',         label: 'Link factura' },
+  { key: 'linkPago',            label: 'Link pago' },
 ];
 
 const PAGE_SIZE = 20;
@@ -84,10 +83,9 @@ function cellContent(row: SheetRow, key: keyof SheetRow) {
 export default function DataTable({ rows, role }: Props) {
   const [page, setPage] = useState(0);
 
-  const columns =
-    role === 'admin'
-      ? [...VIEWER_COLUMNS, ...ADMIN_EXTRA_COLUMNS]
-      : VIEWER_COLUMNS;
+  // `role` se mantiene en la firma por compatibilidad pero ya no afecta columnas.
+  void role;
+  const columns = ALL_COLUMNS;
 
   const totalPages = Math.ceil(rows.length / PAGE_SIZE);
   const visible = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);

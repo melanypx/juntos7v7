@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { getSheetData } from '@/lib/sheets';
+import type { UserMetadata } from '@/lib/types';
 
 export async function GET() {
   const supabase = createServerSupabase();
@@ -12,11 +13,29 @@ export async function GET() {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
+  const meta = (user.user_metadata ?? {}) as UserMetadata;
+  const role = meta.role ?? 'viewer';
+  const linea = meta.linea_presupuestaria?.trim();
+
   try {
     const data = await getSheetData();
-    return NextResponse.json(data, {
+
+    // Admin: ve todo. Viewer: solo su línea (o nada si no tiene línea asignada).
+    let filtered = data;
+    if (role !== 'admin') {
+      if (!linea) {
+        filtered = []; // viewer sin línea → no ve nada
+      } else {
+        // Match por prefijo: "019" matchea "019-01-01", "019" solo, etc.
+        filtered = data.filter((row) =>
+          row.lineaPresupuestaria === linea ||
+          row.lineaPresupuestaria.startsWith(linea + '-')
+        );
+      }
+    }
+
+    return NextResponse.json(filtered, {
       headers: {
-        // Cache por 5 minutos en Vercel Edge; sirve stale mientras revalida
         'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
       },
     });

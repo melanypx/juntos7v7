@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import type { SheetRow } from './types';
+import type { SheetRow, BudgetLine } from './types';
 
 function parseMonto(value: string): number {
   if (!value) return 0;
@@ -42,7 +42,7 @@ export async function getSheetData(): Promise<SheetRow[]> {
 
   // La primera fila es el encabezado; la saltamos
   return rows.slice(1).map((row): SheetRow => ({
-    estado:               row[0]  ?? '',
+    estado:               (row[0]  ?? '').trim(),
     email:                row[1]  ?? '',
     solicitadaPor:        row[2]  ?? '',
     lineaPresupuestaria:  row[3]  ?? '',
@@ -68,4 +68,38 @@ export async function getSheetData(): Promise<SheetRow[]> {
     fechaFactura:         row[23] ?? '',
     linkPago:             row[24] ?? '',
   }));
+}
+
+/**
+ * Lee la hoja PRESUPUESTO y devuelve las líneas que tienen monto asignado.
+ * Columnas: A=código(3-niveles), E=sub-cuenta, F=descripción, G=Subtotal CLP
+ */
+export async function getBudgetData(): Promise<BudgetLine[]> {
+  const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON!);
+  const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+  });
+  const sheets = google.sheets({ version: 'v4', auth });
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID!,
+    range: 'PRESUPUESTO!A:G',
+  });
+
+  const rows = res.data.values ?? [];
+  const result: BudgetLine[] = [];
+
+  for (const row of rows.slice(1)) {
+    const codigo = (row[0] ?? '').trim();
+    // Skip totals row or rows without valid 3-level codes
+    if (!codigo || !codigo.match(/^\d{3}-\d{2}/)) continue;
+    const subtotalRaw = (row[6] ?? '').trim();
+    if (!subtotalRaw || subtotalRaw === '-') continue;
+    const presupuesto = parseMonto(subtotalRaw);
+    if (presupuesto === 0) continue;
+    const descripcion = (row[5] ?? row[4] ?? '').trim();
+    result.push({ codigo, descripcion, presupuesto });
+  }
+
+  return result;
 }

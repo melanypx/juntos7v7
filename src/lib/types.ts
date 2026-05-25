@@ -32,3 +32,9 @@ export interface UserMetadata {
   role: UserRole;
   linea_presupuestaria?: string;
 }
+
+export interface BudgetLine {
+  codigo: string;          // 3-level code, e.g. "006-01-01"
+  descripcion: string;     // budget item description
+  presupuesto: number;     // budgeted amount in CLP
+}

@@ -186,11 +186,11 @@ export default function DashboardShell({ userEmail, role, lineaFiltro }: Props) 
               </div>
             </div>
 
-            {/* Gráficos */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Charts rows={filtered} />
-              <BudgetBreakdown rows={filtered} />
-            </div>
+            {/* Gráfico de barras por mes */}
+            <Charts rows={filtered} />
+
+            {/* Desglose presupuesto vs ejecución */}
+            <BudgetBreakdown rows={filtered} />
 
             {/* Tabla */}
             <DataTable rows={filtered} role={role} />

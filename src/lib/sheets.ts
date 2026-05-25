@@ -97,8 +97,10 @@ export async function getBudgetData(): Promise<BudgetLine[]> {
     if (!subtotalRaw || subtotalRaw === '-') continue;
     const presupuesto = parseMonto(subtotalRaw);
     if (presupuesto === 0) continue;
-    const descripcion = (row[5] ?? row[4] ?? '').trim();
-    result.push({ codigo, descripcion, presupuesto });
+    const categoria   = (row[3] ?? '').trim();
+    const subcuenta   = (row[4] ?? '').trim();
+    const descripcion = (row[5] ?? '').trim();
+    result.push({ codigo, descripcion, categoria, subcuenta, presupuesto });
   }
 
   return result;

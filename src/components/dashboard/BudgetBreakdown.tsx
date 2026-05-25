@@ -28,12 +28,28 @@ interface TreeNode {
 /**
  * Construye un árbol jerárquico de 3 niveles a partir de las líneas de
  * presupuesto y las OCs. Aggrega presupuesto + ejecución de abajo hacia arriba.
+ *
+ * Descripciones por nivel:
+ *  - Nivel 1 (top): categoría topsheet, ej: "PRODUCTION STAFF"
+ *  - Nivel 2 (mid): sub-cuenta, ej: "GASTOS GENERALES"
+ *  - Nivel 3 (leaf): descripción del ítem, ej: "Desarrollo - Chile"
  */
 function buildTree(budget: BudgetLine[], rows: SheetRow[]): TreeNode[] {
   // Mapa: código completo (3 niveles) → descripción del presupuesto
   const descByCode = new Map<string, string>();
+  // Mapa de descripciones agregadas para niveles 1 y 2 (toma la primera no vacía)
+  const categoriaByTop = new Map<string, string>();
+  const subcuentaByMid = new Map<string, string>();
   for (const b of budget) {
     descByCode.set(b.codigo, b.descripcion);
+    const top = b.codigo.split('-')[0];
+    const mid = b.codigo.split('-').slice(0, 2).join('-');
+    if (b.categoria && !categoriaByTop.has(top)) {
+      categoriaByTop.set(top, b.categoria);
+    }
+    if (b.subcuenta && !subcuentaByMid.has(mid)) {
+      subcuentaByMid.set(mid, b.subcuenta);
+    }
   }
 
   // Recolecta todos los códigos (de presupuesto + OCs)
@@ -94,7 +110,7 @@ function buildTree(budget: BudgetLine[], rows: SheetRow[]): TreeNode[] {
     if (!midNodes.has(mid)) {
       midNodes.set(mid, {
         codigo: mid,
-        descripcion: '',
+        descripcion: subcuentaByMid.get(mid) ?? '',
         presupuesto: 0,
         ejecutado: 0,
         level: 2,
@@ -114,7 +130,7 @@ function buildTree(budget: BudgetLine[], rows: SheetRow[]): TreeNode[] {
     if (!topNodes.has(top)) {
       topNodes.set(top, {
         codigo: top,
-        descripcion: '',
+        descripcion: categoriaByTop.get(top) ?? '',
         presupuesto: 0,
         ejecutado: 0,
         level: 1,

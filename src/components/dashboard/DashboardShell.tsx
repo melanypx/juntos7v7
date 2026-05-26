@@ -58,15 +58,30 @@ export default function DashboardShell({ userEmail, role, lineaFiltro }: Props) 
     router.push('/login');
   }
 
-  // Opciones únicas para cada filtro
+  // Opciones únicas para cada filtro.
+  // Para la línea presupuestaria solo mostramos hasta el segundo nivel (ej.
+  // "007-01") — el tercer nivel (007-01-01) no es necesario en el dropdown.
+  const toMidLevel = (code: string) => {
+    const parts = code.split('-');
+    return parts.length <= 2 ? code : parts.slice(0, 2).join('-');
+  };
+
   const estados = Array.from(new Set(rows.map((r) => r.estado).filter(Boolean))).sort();
-  const lineas = Array.from(new Set(rows.map((r) => r.lineaPresupuestaria).filter(Boolean))).sort();
+  const lineas = Array.from(
+    new Set(rows.map((r) => toMidLevel(r.lineaPresupuestaria)).filter(Boolean))
+  ).sort();
   const meses = Array.from(new Set(rows.map((r) => r.mes).filter(Boolean)));
 
-  // Filas filtradas (filtros del cliente — el filtro por rol/línea es server-side)
+  // Filas filtradas. Para la línea hacemos match por prefijo de modo que
+  // seleccionar "007-01" muestre 007-01, 007-01-01, 007-01-02, etc.
   const filtered = rows.filter((r) => {
     if (filterEstado && r.estado !== filterEstado) return false;
-    if (filterLinea && r.lineaPresupuestaria !== filterLinea) return false;
+    if (
+      filterLinea &&
+      r.lineaPresupuestaria !== filterLinea &&
+      !r.lineaPresupuestaria.startsWith(filterLinea + '-')
+    )
+      return false;
     if (filterMes && r.mes !== filterMes) return false;
     return true;
   });

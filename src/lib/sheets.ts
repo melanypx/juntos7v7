@@ -3,9 +3,16 @@ import type { SheetRow, BudgetLine } from './types';
 
 function parseMonto(value: string): number {
   if (!value) return 0;
+  const trimmed = value.trim();
+  // Detecta números negativos: "-$50.000", "($50.000)", "-50.000"
+  const isNegative =
+    /^-/.test(trimmed) ||
+    /^\$\s*-/.test(trimmed) ||
+    /^\(.*\)$/.test(trimmed);
   // Maneja formato chileno: "$ 1.234.567" o "1234567"
-  const clean = value.replace(/[^0-9]/g, '');
-  return parseInt(clean, 10) || 0;
+  const clean = trimmed.replace(/[^0-9]/g, '');
+  const n = parseInt(clean, 10) || 0;
+  return isNegative ? -n : n;
 }
 
 export async function getSheetHeaders(): Promise<string[]> {

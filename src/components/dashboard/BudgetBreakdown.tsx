@@ -23,6 +23,7 @@ interface TreeNode {
   ejecutado: number;
   level: number;         // 1, 2, or 3
   children: TreeNode[];
+  ocs: SheetRow[];       // OCs individuales (solo poblado en hojas nivel 3)
 }
 
 /**
@@ -104,6 +105,15 @@ function buildTree(
     presPorCodigo.set(b.codigo, (presPorCodigo.get(b.codigo) ?? 0) + b.presupuesto);
   }
 
+  // Recolecta las OCs (rows) que aplican a cada hoja (nivel 3)
+  const ocsPorLeaf = new Map<string, SheetRow[]>();
+  for (const r of rows) {
+    if (!r.lineaPresupuestaria) continue;
+    const { leaf } = normalize(r.lineaPresupuestaria);
+    if (!ocsPorLeaf.has(leaf)) ocsPorLeaf.set(leaf, []);
+    ocsPorLeaf.get(leaf)!.push(r);
+  }
+
   // Construye los nodos hoja (nivel 3)
   const leafNodes = new Map<string, TreeNode>();
   for (const code of Array.from(allCodes)) {
@@ -116,6 +126,7 @@ function buildTree(
         ejecutado: 0,
         level: 3,
         children: [],
+        ocs: ocsPorLeaf.get(leaf) ?? [],
       });
     }
     const node = leafNodes.get(leaf)!;
@@ -135,6 +146,7 @@ function buildTree(
         ejecutado: 0,
         level: 2,
         children: [],
+        ocs: [],
       });
     }
     const node = midNodes.get(mid)!;
@@ -155,6 +167,7 @@ function buildTree(
         ejecutado: 0,
         level: 1,
         children: [],
+        ocs: [],
       });
     }
     const node = topNodes.get(top)!;
@@ -191,6 +204,8 @@ function pctColor(pct: number) {
 function NodeRow({ node, expanded, toggle }: RowProps) {
   const isOpen = expanded.has(node.codigo);
   const hasChildren = node.children.length > 0;
+  const hasOcs = node.ocs.length > 0;
+  const canExpand = hasChildren || hasOcs;
   const disponible = node.presupuesto - node.ejecutado;
   const pct =
     node.presupuesto > 0 ? Math.min((node.ejecutado / node.presupuesto) * 100, 100) : 0;
@@ -205,13 +220,13 @@ function NodeRow({ node, expanded, toggle }: RowProps) {
     <>
       <tr
         className={`${bg} border-b border-gray-100 hover:bg-blue-50 transition-colors ${
-          hasChildren ? 'cursor-pointer' : ''
+          canExpand ? 'cursor-pointer' : ''
         }`}
-        onClick={() => hasChildren && toggle(node.codigo)}
+        onClick={() => canExpand && toggle(node.codigo)}
       >
         <td className={`py-2.5 pr-4 ${textSize}`} style={{ paddingLeft: `${16 + indent}px` }}>
           <div className="flex items-center gap-2">
-            {hasChildren ? (
+            {canExpand ? (
               <span className="text-gray-400 inline-block w-3 text-center">
                 {isOpen ? '▾' : '▸'}
               </span>
@@ -222,6 +237,11 @@ function NodeRow({ node, expanded, toggle }: RowProps) {
             {node.descripcion && (
               <span className="text-gray-500 ml-2 truncate max-w-xs" title={node.descripcion}>
                 {node.descripcion}
+              </span>
+            )}
+            {!hasChildren && hasOcs && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium ml-1">
+                {node.ocs.length} OC{node.ocs.length === 1 ? '' : 's'}
               </span>
             )}
           </div>
@@ -271,6 +291,56 @@ function NodeRow({ node, expanded, toggle }: RowProps) {
         node.children.map((c) => (
           <NodeRow key={c.codigo} node={c} expanded={expanded} toggle={toggle} />
         ))}
+      {isOpen && !hasChildren && hasOcs && (
+        <>
+          <tr className="bg-blue-50/40 border-b border-blue-100">
+            <td colSpan={6} className="px-4 py-1.5 text-[10px] font-semibold text-blue-700 uppercase tracking-wide" style={{ paddingLeft: `${16 + indent + 24}px` }}>
+              Detalle de OCs
+            </td>
+          </tr>
+          {node.ocs.map((oc, i) => {
+            const lower = oc.estado.toLowerCase();
+            const estadoCls = lower.includes('pag')
+              ? 'bg-green-100 text-green-700'
+              : lower.includes('pend')
+              ? 'bg-amber-100 text-amber-700'
+              : lower.includes('rechaz') || lower.includes('cancel')
+              ? 'bg-red-100 text-red-700'
+              : 'bg-gray-100 text-gray-600';
+            return (
+              <tr
+                key={`${node.codigo}-oc-${i}`}
+                className="bg-blue-50/20 border-b border-blue-50 text-[11px]"
+              >
+                <td colSpan={6} className="px-4 py-1.5" style={{ paddingLeft: `${16 + indent + 24}px` }}>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-gray-500 shrink-0 w-20">{oc.nroOC || '—'}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${estadoCls}`}
+                    >
+                      {oc.estado || '—'}
+                    </span>
+                    <span className="text-gray-600 shrink-0 w-16">{oc.mes || ''}</span>
+                    <span className="text-gray-700 truncate flex-1" title={oc.proveedor}>
+                      {oc.proveedor || '—'}
+                    </span>
+                    <span className="text-gray-500 italic truncate flex-1" title={oc.descripcion}>
+                      {oc.descripcion}
+                    </span>
+                    <span
+                      className={`font-semibold shrink-0 tabular-nums ${
+                        oc.monto < 0 ? 'text-red-600' : 'text-gray-700'
+                      }`}
+                    >
+                      {formatCLP(oc.monto)}
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </>
+      )}
     </>
   );
 }
@@ -332,7 +402,12 @@ export default function BudgetBreakdown({ rows }: Props) {
     const all = new Set<string>();
     for (const t of tree) {
       all.add(t.codigo);
-      for (const m of t.children) all.add(m.codigo);
+      for (const m of t.children) {
+        all.add(m.codigo);
+        for (const leaf of m.children) {
+          if (leaf.ocs.length > 0) all.add(leaf.codigo);
+        }
+      }
     }
     setExpanded(all);
   }
@@ -483,7 +558,8 @@ export default function BudgetBreakdown({ rows }: Props) {
             </table>
           </div>
           <p className="px-5 py-3 text-xs text-gray-400 border-t border-gray-100">
-            Click en una fila con ▸ para expandir el siguiente nivel.
+            Click en una fila con ▸ para expandir. En el nivel más fino verás
+            las OCs individuales con su número, proveedor, monto y estado.
           </p>
         </>
       )}

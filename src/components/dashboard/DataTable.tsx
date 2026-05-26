@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { SheetRow, UserRole } from '@/lib/types';
 import { exportToCSV } from '@/lib/export-csv';
 
@@ -81,22 +81,110 @@ function cellContent(row: SheetRow, key: keyof SheetRow) {
   return String(value ?? '');
 }
 
+/**
+ * Renderiza el contenido de una celda PARENT (fila agrupada por OC).
+ * Para el monto muestra la SUMA; para la línea muestra "N líneas" si difieren;
+ * para el resto toma el primer valor (que típicamente es el mismo en todas las
+ * filas de la misma OC).
+ */
+function parentCellContent(group: OCGroup, key: keyof SheetRow) {
+  if (key === 'monto') {
+    return <span className="font-semibold">{formatCLP(group.totalMonto)}</span>;
+  }
+  if (key === 'lineaPresupuestaria' && group.lineas.size > 1) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+          {group.lineas.size} líneas
+        </span>
+      </span>
+    );
+  }
+  return cellContent(group.rows[0], key);
+}
+
+interface OCGroup {
+  key: string;             // identificador único de la agrupación
+  nroOC: string;
+  rows: SheetRow[];
+  totalMonto: number;
+  lineas: Set<string>;
+  isMultiple: boolean;
+}
+
+function groupByOC(rows: SheetRow[]): OCGroup[] {
+  const map = new Map<string, SheetRow[]>();
+  const sinOC: SheetRow[] = [];
+
+  for (const row of rows) {
+    const oc = (row.nroOC ?? '').trim();
+    if (!oc) {
+      sinOC.push(row);
+      continue;
+    }
+    if (!map.has(oc)) map.set(oc, []);
+    map.get(oc)!.push(row);
+  }
+
+  const groups: OCGroup[] = [];
+  let idx = 0;
+  for (const [nroOC, ocRows] of Array.from(map.entries())) {
+    const total = ocRows.reduce((s, r) => s + r.monto, 0);
+    const lineas = new Set(ocRows.map((r) => r.lineaPresupuestaria).filter(Boolean));
+    groups.push({
+      key: `oc-${nroOC}`,
+      nroOC,
+      rows: ocRows,
+      totalMonto: total,
+      lineas,
+      isMultiple: ocRows.length > 1,
+    });
+  }
+  // Filas sin nro de OC → cada una como grupo individual
+  for (const row of sinOC) {
+    groups.push({
+      key: `nooc-${idx++}`,
+      nroOC: '',
+      rows: [row],
+      totalMonto: row.monto,
+      lineas: new Set([row.lineaPresupuestaria].filter(Boolean)),
+      isMultiple: false,
+    });
+  }
+
+  return groups;
+}
+
 export default function DataTable({ rows, role }: Props) {
   const [page, setPage] = useState(0);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   // `role` se mantiene en la firma por compatibilidad pero ya no afecta columnas.
   void role;
   const columns = ALL_COLUMNS;
 
-  const totalPages = Math.ceil(rows.length / PAGE_SIZE);
-  const visible = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const groups = useMemo(() => groupByOC(rows), [rows]);
+
+  const totalPages = Math.ceil(groups.length / PAGE_SIZE);
+  const visibleGroups = groups.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  function toggle(key: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-gray-700">Detalle de OCs</h2>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-400">{rows.length} registros</span>
+          <span className="text-xs text-gray-400">
+            {groups.length} OCs · {rows.length} líneas
+          </span>
           <button
             type="button"
             onClick={() => {
@@ -133,6 +221,7 @@ export default function DataTable({ rows, role }: Props) {
         <table className="w-full text-xs">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
+              <th className="w-8 px-2" />
               {columns.map((col) => (
                 <th
                   key={col.key}
@@ -144,31 +233,74 @@ export default function DataTable({ rows, role }: Props) {
             </tr>
           </thead>
           <tbody>
-            {visible.length === 0 ? (
+            {visibleGroups.length === 0 ? (
               <tr>
                 <td
-                  colSpan={columns.length}
+                  colSpan={columns.length + 1}
                   className="text-center py-12 text-gray-400"
                 >
                   Sin registros para los filtros seleccionados
                 </td>
               </tr>
             ) : (
-              visible.map((row, i) => (
-                <tr
-                  key={i}
-                  className="border-b border-gray-50 hover:bg-gray-50 transition-colors"
-                >
-                  {columns.map((col) => (
-                    <td
-                      key={col.key}
-                      className="px-4 py-3 text-gray-700 whitespace-nowrap max-w-xs truncate"
+              visibleGroups.map((group) => {
+                const isOpen = expanded.has(group.key);
+                const canExpand = group.isMultiple;
+
+                return (
+                  <>
+                    {/* Fila padre (agrupada o única) */}
+                    <tr
+                      key={group.key}
+                      className={`border-b border-gray-50 transition-colors ${
+                        canExpand
+                          ? 'bg-purple-50/30 hover:bg-purple-50 cursor-pointer'
+                          : 'hover:bg-gray-50'
+                      }`}
+                      onClick={() => canExpand && toggle(group.key)}
                     >
-                      {cellContent(row, col.key)}
-                    </td>
-                  ))}
-                </tr>
-              ))
+                      <td className="w-8 px-2 text-gray-400 text-center">
+                        {canExpand ? (isOpen ? '▾' : '▸') : ''}
+                      </td>
+                      {columns.map((col) => (
+                        <td
+                          key={col.key}
+                          className="px-4 py-3 text-gray-700 whitespace-nowrap max-w-xs truncate"
+                        >
+                          {canExpand
+                            ? parentCellContent(group, col.key)
+                            : cellContent(group.rows[0], col.key)}
+                        </td>
+                      ))}
+                    </tr>
+
+                    {/* Filas hijas (cuando está expandido) */}
+                    {canExpand &&
+                      isOpen &&
+                      group.rows.map((row, i) => (
+                        <tr
+                          key={`${group.key}-child-${i}`}
+                          className="border-b border-gray-50 bg-gray-50/50"
+                        >
+                          <td className="w-8 px-2" />
+                          {columns.map((col) => (
+                            <td
+                              key={col.key}
+                              className="px-4 py-2.5 text-gray-600 whitespace-nowrap max-w-xs truncate"
+                              style={
+                                col.key === 'estado' || col.key === 'lineaPresupuestaria'
+                                  ? { paddingLeft: '2rem' }
+                                  : undefined
+                              }
+                            >
+                              {cellContent(row, col.key)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                  </>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -197,6 +329,11 @@ export default function DataTable({ rows, role }: Props) {
           </button>
         </div>
       )}
+
+      <p className="px-5 py-2 text-xs text-gray-400 border-t border-gray-100">
+        Las OCs con el mismo número se muestran agrupadas (badge violeta). Click en
+        la fila para ver el desglose por línea.
+      </p>
     </div>
   );
 }

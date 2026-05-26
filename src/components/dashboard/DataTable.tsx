@@ -158,15 +158,40 @@ function groupByOC(rows: SheetRow[]): OCGroup[] {
 export default function DataTable({ rows, role }: Props) {
   const [page, setPage] = useState(0);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
 
   // `role` se mantiene en la firma por compatibilidad pero ya no afecta columnas.
   void role;
   const columns = ALL_COLUMNS;
 
-  const groups = useMemo(() => groupByOC(rows), [rows]);
+  // Filtra por texto antes de agrupar — busca en todos los campos relevantes
+  const searched = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => {
+      const haystack = [
+        r.nroOC,
+        r.proveedor,
+        r.descripcion,
+        r.proyecto,
+        r.lineaPresupuestaria,
+        r.estado,
+        r.mes,
+        r.nroDocumento,
+        r.tipoDocumento,
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [rows, search]);
+
+  const groups = useMemo(() => groupByOC(searched), [searched]);
 
   const totalPages = Math.ceil(groups.length / PAGE_SIZE);
-  const visibleGroups = groups.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  // Si cambia el filtro y la página queda fuera de rango, vuelve a la 0
+  const safePage = Math.min(page, Math.max(0, totalPages - 1));
+  const visibleGroups = groups.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   function toggle(key: string) {
     setExpanded((prev) => {
@@ -179,18 +204,64 @@ export default function DataTable({ rows, role }: Props) {
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-gray-700">Detalle de OCs</h2>
+      <div className="px-5 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <h2 className="text-sm font-semibold text-gray-700 whitespace-nowrap">Detalle de OCs</h2>
+          {/* Buscador */}
+          <div className="relative flex-1 sm:w-72 sm:flex-initial">
+            <svg
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="search"
+              placeholder="Buscar por OC, proveedor, descripción…"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(0);
+              }}
+              className="w-full text-xs border border-gray-200 rounded-lg pl-8 pr-3 py-1.5
+                         focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setPage(0);
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                aria-label="Limpiar búsqueda"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-400">
-            {groups.length} OCs · {rows.length} líneas
+          <span className="text-xs text-gray-400 whitespace-nowrap">
+            {groups.length} OCs · {searched.length} líneas
+            {search && rows.length !== searched.length && (
+              <span className="text-gray-300"> · de {rows.length}</span>
+            )}
           </span>
           <button
             type="button"
             onClick={() => {
               const stamp = new Date().toISOString().slice(0, 10);
               exportToCSV(
-                rows,
+                searched,
                 columns.map((c) => ({
                   key: c.key,
                   label: c.label,
@@ -202,10 +273,10 @@ export default function DataTable({ rows, role }: Props) {
                 `ocs-${stamp}.csv`
               );
             }}
-            disabled={rows.length === 0}
+            disabled={searched.length === 0}
             className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium
                        hover:bg-blue-700 transition-colors disabled:opacity-40
-                       disabled:cursor-not-allowed flex items-center gap-1.5"
+                       disabled:cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -309,19 +380,19 @@ export default function DataTable({ rows, role }: Props) {
       {totalPages > 1 && (
         <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
           <button
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            disabled={page === 0}
+            onClick={() => setPage(Math.max(0, safePage - 1))}
+            disabled={safePage === 0}
             className="text-xs px-3 py-1.5 rounded-lg border border-gray-200
                        hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             ← Anterior
           </button>
           <span className="text-xs text-gray-500">
-            Página {page + 1} de {totalPages}
+            Página {safePage + 1} de {totalPages}
           </span>
           <button
-            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            disabled={page >= totalPages - 1}
+            onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))}
+            disabled={safePage >= totalPages - 1}
             className="text-xs px-3 py-1.5 rounded-lg border border-gray-200
                        hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
           >

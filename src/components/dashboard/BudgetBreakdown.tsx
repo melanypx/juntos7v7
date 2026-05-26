@@ -321,6 +321,12 @@ function NodeRow({ node, expanded, toggle }: RowProps) {
                       {oc.estado || '—'}
                     </span>
                     <span className="text-gray-600 shrink-0 w-16">{oc.mes || ''}</span>
+                    <span
+                      className="text-gray-600 shrink-0 w-32 truncate"
+                      title={oc.solicitadaPor}
+                    >
+                      {oc.solicitadaPor ? `👤 ${oc.solicitadaPor}` : ''}
+                    </span>
                     <span className="text-gray-700 truncate flex-1" title={oc.proveedor}>
                       {oc.proveedor || '—'}
                     </span>

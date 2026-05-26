@@ -36,11 +36,34 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json(filtered, {
-      headers: {
-        'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
+    // Mapa de nombres de categoría (top-level) y sub-cuenta (mid-level)
+    // construido SIN filtrar para que el viewer vea "PROPERTIES" en 010
+    // aunque solo tenga acceso a la sub-línea 010-03.
+    // Son solo nombres, no montos, así que no expone datos sensibles.
+    const categoryNames: Record<string, string> = {};
+    const subcuentaNames: Record<string, string> = {};
+    for (const b of data) {
+      const top = b.codigo.split('-')[0];
+      const mid = b.codigo.split('-').slice(0, 2).join('-');
+      if (b.categoria && !categoryNames[top]) categoryNames[top] = b.categoria;
+      if (b.subcuenta && !subcuentaNames[mid]) subcuentaNames[mid] = b.subcuenta;
+    }
+
+    return NextResponse.json(
+      {
+        budget: filtered,
+        categoryNames,
+        subcuentaNames,
+        // Para que el front pueda crear nodos vacíos por las líneas asignadas
+        // (ej: 012-03 que Caro tiene pero no tiene OCs ni presupuesto)
+        assignedLines: role === 'admin' ? [] : lineas,
       },
-    });
+      {
+        headers: {
+          'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
+        },
+      }
+    );
   } catch (err) {
     console.error('[budget] Error al leer PRESUPUESTO:', err);
     return NextResponse.json(

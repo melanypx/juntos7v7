@@ -33,13 +33,28 @@ interface TreeNode {
  *  - Nivel 1 (top): categoría topsheet, ej: "PRODUCTION STAFF"
  *  - Nivel 2 (mid): sub-cuenta, ej: "GASTOS GENERALES"
  *  - Nivel 3 (leaf): descripción del ítem, ej: "Desarrollo - Chile"
+ *
+ * `assignedLines` son las líneas que el usuario tiene permitidas (ej. Caro
+ * tiene 008-03, 008-04, 009-03, 010-03, 012-03). Se usan para crear nodos
+ * vacíos para las líneas sin datos, así Caro ve "012 WARDROBE" aunque no
+ * tenga OCs ni presupuesto en 012-03 todavía.
+ *
+ * `categoryNamesExt` y `subcuentaNamesExt` son los nombres completos
+ * (sin filtrar por permisos) para que el viewer vea "PROPERTIES" incluso
+ * cuando solo tiene una sub-línea sin presupuesto definido.
  */
-function buildTree(budget: BudgetLine[], rows: SheetRow[]): TreeNode[] {
+function buildTree(
+  budget: BudgetLine[],
+  rows: SheetRow[],
+  assignedLines: string[] = [],
+  categoryNamesExt: Record<string, string> = {},
+  subcuentaNamesExt: Record<string, string> = {}
+): TreeNode[] {
   // Mapa: código completo (3 niveles) → descripción del presupuesto
   const descByCode = new Map<string, string>();
   // Mapa de descripciones agregadas para niveles 1 y 2 (toma la primera no vacía)
-  const categoriaByTop = new Map<string, string>();
-  const subcuentaByMid = new Map<string, string>();
+  const categoriaByTop = new Map<string, string>(Object.entries(categoryNamesExt));
+  const subcuentaByMid = new Map<string, string>(Object.entries(subcuentaNamesExt));
   for (const b of budget) {
     descByCode.set(b.codigo, b.descripcion);
     const top = b.codigo.split('-')[0];
@@ -52,11 +67,16 @@ function buildTree(budget: BudgetLine[], rows: SheetRow[]): TreeNode[] {
     }
   }
 
-  // Recolecta todos los códigos (de presupuesto + OCs)
+  // Recolecta todos los códigos (de presupuesto + OCs + líneas asignadas)
   const allCodes = new Set<string>();
   for (const b of budget) allCodes.add(b.codigo);
   for (const r of rows) {
     if (r.lineaPresupuestaria) allCodes.add(r.lineaPresupuestaria);
+  }
+  // Incluye líneas que el usuario tiene asignadas aunque no tengan datos —
+  // así aparecen 012-03, etc. con monto $0 si todavía no se ha cargado nada
+  for (const line of assignedLines) {
+    if (line) allCodes.add(line);
   }
 
   // Normaliza códigos a 3 niveles (rellena con "00" si vienen en formato corto)
@@ -255,20 +275,44 @@ function NodeRow({ node, expanded, toggle }: RowProps) {
   );
 }
 
+interface BudgetResponse {
+  budget: BudgetLine[];
+  categoryNames: Record<string, string>;
+  subcuentaNames: Record<string, string>;
+  assignedLines: string[];
+}
+
 export default function BudgetBreakdown({ rows }: Props) {
   const [budget, setBudget] = useState<BudgetLine[]>([]);
+  const [categoryNames, setCategoryNames] = useState<Record<string, string>>({});
+  const [subcuentaNames, setSubcuentaNames] = useState<Record<string, string>>({});
+  const [assignedLines, setAssignedLines] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetch('/api/budget')
       .then((r) => r.json())
-      .then((d: BudgetLine[]) => setBudget(Array.isArray(d) ? d : []))
+      .then((d: BudgetResponse | BudgetLine[]) => {
+        // Compatibilidad: si por algún motivo viene como array (versión vieja
+        // del endpoint), lo manejamos también.
+        if (Array.isArray(d)) {
+          setBudget(d);
+          return;
+        }
+        setBudget(Array.isArray(d.budget) ? d.budget : []);
+        setCategoryNames(d.categoryNames ?? {});
+        setSubcuentaNames(d.subcuentaNames ?? {});
+        setAssignedLines(Array.isArray(d.assignedLines) ? d.assignedLines : []);
+      })
       .catch(() => setBudget([]))
       .finally(() => setLoading(false));
   }, []);
 
-  const tree = useMemo(() => buildTree(budget, rows), [budget, rows]);
+  const tree = useMemo(
+    () => buildTree(budget, rows, assignedLines, categoryNames, subcuentaNames),
+    [budget, rows, assignedLines, categoryNames, subcuentaNames]
+  );
 
   const totalP = tree.reduce((s, n) => s + n.presupuesto, 0);
   const totalE = tree.reduce((s, n) => s + n.ejecutado, 0);

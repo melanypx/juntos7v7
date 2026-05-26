@@ -16,6 +16,7 @@ interface Props {
 }
 
 const REFRESH_MS = 5 * 60 * 1000;
+const FORM_NUEVA_OC = 'https://forms.gle/JdSU9Q93kLZYhcu27';
 
 type Tab = 'resumen' | 'presupuesto' | 'ocs';
 
@@ -106,6 +107,19 @@ export default function DashboardShell({ userEmail, role, lineaFiltro }: Props) 
             )}
           </div>
           <div className="flex items-center gap-3">
+            <a
+              href={FORM_NUEVA_OC}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium
+                         hover:bg-blue-700 transition-colors flex items-center gap-1.5 shadow-sm"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Nueva OC
+            </a>
             <span className="text-sm text-gray-500 hidden sm:block">{userEmail}</span>
             <span
               className={`text-xs px-2 py-1 rounded-full font-medium ${

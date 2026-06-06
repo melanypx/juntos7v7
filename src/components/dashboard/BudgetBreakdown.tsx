@@ -358,6 +358,8 @@ interface BudgetResponse {
   assignedLines: string[];
 }
 
+const BUDGET_REFRESH_MS = 5 * 60 * 1000;
+
 export default function BudgetBreakdown({ rows }: Props) {
   const [budget, setBudget] = useState<BudgetLine[]>([]);
   const [categoryNames, setCategoryNames] = useState<Record<string, string>>({});
@@ -367,11 +369,12 @@ export default function BudgetBreakdown({ rows }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetch('/api/budget')
-      .then((r) => r.json())
-      .then((d: BudgetResponse | BudgetLine[]) => {
-        // Compatibilidad: si por algún motivo viene como array (versión vieja
-        // del endpoint), lo manejamos también.
+    async function load() {
+      try {
+        // cache: 'no-store' fuerza fetch fresco; sin esto el navegador podría
+        // servir la respuesta del primer load durante toda la sesión.
+        const r = await fetch('/api/budget', { cache: 'no-store' });
+        const d: BudgetResponse | BudgetLine[] = await r.json();
         if (Array.isArray(d)) {
           setBudget(d);
           return;
@@ -380,9 +383,16 @@ export default function BudgetBreakdown({ rows }: Props) {
         setCategoryNames(d.categoryNames ?? {});
         setSubcuentaNames(d.subcuentaNames ?? {});
         setAssignedLines(Array.isArray(d.assignedLines) ? d.assignedLines : []);
-      })
-      .catch(() => setBudget([]))
-      .finally(() => setLoading(false));
+      } catch {
+        setBudget([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+    // Re-lee el presupuesto cada 5 minutos para reflejar ediciones en el Sheet
+    const interval = setInterval(load, BUDGET_REFRESH_MS);
+    return () => clearInterval(interval);
   }, []);
 
   const tree = useMemo(

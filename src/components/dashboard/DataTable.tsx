@@ -43,12 +43,14 @@ const ALL_COLUMNS: Column[] = [
 
 const PAGE_SIZE = 20;
 
-// Los estados en el Sheet pueden variar — coloreamos por keyword
+// Los estados en el Sheet pueden variar — coloreamos por keyword.
+// IMPORTANTE: "POR PAGAR" NO debe ser verde (todavía no se paga).
 function estadoBadge(estado: string) {
-  const lower = estado.toLowerCase();
+  const lower = estado.toLowerCase().trim();
   let cls = 'bg-gray-100 text-gray-600';
-  if (lower.includes('pag')) cls = 'bg-green-100 text-green-700';
-  else if (lower.includes('pend')) cls = 'bg-amber-100 text-amber-700';
+  if (lower.startsWith('pag')) cls = 'bg-green-100 text-green-700';
+  else if (lower.includes('por pag') || lower.includes('pend') || lower.includes('solic'))
+    cls = 'bg-amber-100 text-amber-700';
   else if (lower.includes('rechaz') || lower.includes('cancel'))
     cls = 'bg-red-100 text-red-700';
   return (

@@ -13,7 +13,9 @@ function formatCLP(n: number) {
 }
 
 function isPagada(estado: string): boolean {
-  return estado?.toLowerCase().includes('pag');
+  // Solo cuenta como pagada si empieza con "pag" (PAGADA, PAGADO).
+  // Excluye explícitamente "POR PAGAR" — esa OC todavía no se paga.
+  return estado?.toLowerCase().trim().startsWith('pag');
 }
 
 export default function KPICards({ rows }: Props) {

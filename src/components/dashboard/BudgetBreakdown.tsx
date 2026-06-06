@@ -299,10 +299,10 @@ function NodeRow({ node, expanded, toggle }: RowProps) {
             </td>
           </tr>
           {node.ocs.map((oc, i) => {
-            const lower = oc.estado.toLowerCase();
-            const estadoCls = lower.includes('pag')
+            const lower = oc.estado.toLowerCase().trim();
+            const estadoCls = lower.startsWith('pag')
               ? 'bg-green-100 text-green-700'
-              : lower.includes('pend')
+              : lower.includes('por pag') || lower.includes('pend') || lower.includes('solic')
               ? 'bg-amber-100 text-amber-700'
               : lower.includes('rechaz') || lower.includes('cancel')
               ? 'bg-red-100 text-red-700'

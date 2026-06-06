@@ -23,7 +23,8 @@ function formatM(n: number) {
 }
 
 function isPagada(estado: string): boolean {
-  return estado?.toLowerCase().includes('pag');
+  // Solo cuenta como pagada si empieza con "pag" (excluye "POR PAGAR")
+  return estado?.toLowerCase().trim().startsWith('pag');
 }
 
 export default function Charts({ rows }: Props) {

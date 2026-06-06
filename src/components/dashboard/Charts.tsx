@@ -8,6 +8,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
+  Legend,
 } from 'recharts';
 import type { SheetRow } from '@/lib/types';
 
@@ -21,31 +22,67 @@ function formatM(n: number) {
   return `$${n}`;
 }
 
+function isPagada(estado: string): boolean {
+  return estado?.toLowerCase().includes('pag');
+}
+
 export default function Charts({ rows }: Props) {
-  const byMes = Object.entries(
-    rows.reduce<Record<string, number>>((acc, r) => {
-      if (!r.mes) return acc;
-      acc[r.mes] = (acc[r.mes] ?? 0) + r.monto;
-      return acc;
-    }, {})
-  ).map(([mes, monto]) => ({ mes, monto }));
+  // Agrupa por mes y separa solicitado vs pagado
+  const map = new Map<string, { mes: string; solicitado: number; pagado: number }>();
+  for (const r of rows) {
+    if (!r.mes) continue;
+    if (!map.has(r.mes)) {
+      map.set(r.mes, { mes: r.mes, solicitado: 0, pagado: 0 });
+    }
+    const entry = map.get(r.mes)!;
+    entry.solicitado += r.monto;
+    if (isPagada(r.estado)) entry.pagado += r.monto;
+  }
+  const byMes = Array.from(map.values());
+
+  const totalSolicitado = byMes.reduce((s, m) => s + m.solicitado, 0);
+  const totalPagado = byMes.reduce((s, m) => s + m.pagado, 0);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <h2 className="text-sm font-semibold text-gray-700 mb-4">Monto por mes</h2>
+      <div className="flex items-baseline justify-between mb-4">
+        <h2 className="text-sm font-semibold text-gray-700">
+          Solicitado vs Pagado por mes
+        </h2>
+        <div className="text-xs text-gray-400 flex gap-4">
+          <span>
+            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-500 mr-1.5 align-middle" />
+            Solicitado:{' '}
+            <span className="font-medium text-gray-700">{formatM(totalSolicitado)}</span>
+          </span>
+          <span>
+            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500 mr-1.5 align-middle" />
+            Pagado:{' '}
+            <span className="font-medium text-gray-700">{formatM(totalPagado)}</span>
+          </span>
+        </div>
+      </div>
       {byMes.length === 0 ? (
         <p className="text-center text-gray-400 text-sm py-10">Sin datos</p>
       ) : (
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height={260}>
           <BarChart data={byMes} margin={{ top: 0, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
             <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
             <YAxis tickFormatter={formatM} tick={{ fontSize: 11 }} width={48} />
             <Tooltip
-              formatter={(v: number) => [formatM(v), 'Monto']}
+              formatter={(v: number, name: string) => [
+                formatM(v),
+                name === 'solicitado' ? 'Solicitado' : 'Pagado',
+              ]}
               contentStyle={{ fontSize: 12 }}
             />
-            <Bar dataKey="monto" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+            <Legend
+              wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+              formatter={(v) => (v === 'solicitado' ? 'Solicitado' : 'Pagado')}
+            />
+            <Bar dataKey="solicitado" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="pagado" fill="#22c55e" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       )}

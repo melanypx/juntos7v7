@@ -12,42 +12,50 @@ function formatCLP(n: number) {
   });
 }
 
-export default function KPICards({ rows }: Props) {
-  const total = rows.reduce((acc, r) => acc + r.monto, 0);
-  const totalOCs = rows.length;
+function isPagada(estado: string): boolean {
+  return estado?.toLowerCase().includes('pag');
+}
 
-  // Conteo por estado (case-insensitive, parcial)
-  const pagados = rows.filter((r) =>
-    r.estado?.toLowerCase().includes('pag')
-  ).length;
-  const pendientes = rows.filter((r) =>
-    r.estado?.toLowerCase().includes('pend')
-  ).length;
+export default function KPICards({ rows }: Props) {
+  const totalSolicitado = rows.reduce((acc, r) => acc + r.monto, 0);
+  const totalPagado = rows
+    .filter((r) => isPagada(r.estado))
+    .reduce((acc, r) => acc + r.monto, 0);
+  const totalPendiente = totalSolicitado - totalPagado;
+  const totalOCs = rows.length;
+  const countPagadas = rows.filter((r) => isPagada(r.estado)).length;
 
   const cards = [
     {
-      label: 'Monto total',
-      value: formatCLP(total),
+      label: 'Monto solicitado',
+      value: formatCLP(totalSolicitado),
+      sub: `${totalOCs} OCs`,
       color: 'text-blue-600',
       bg: 'bg-blue-50',
     },
     {
-      label: 'Total OCs',
-      value: totalOCs.toString(),
-      color: 'text-gray-700',
-      bg: 'bg-gray-50',
-    },
-    {
-      label: 'Pagados',
-      value: pagados.toString(),
+      label: 'Monto pagado',
+      value: formatCLP(totalPagado),
+      sub: `${countPagadas} OCs`,
       color: 'text-green-600',
       bg: 'bg-green-50',
     },
     {
-      label: 'Pendientes',
-      value: pendientes.toString(),
+      label: 'Pendiente de pago',
+      value: formatCLP(totalPendiente),
+      sub: `${totalOCs - countPagadas} OCs`,
       color: 'text-amber-600',
       bg: 'bg-amber-50',
+    },
+    {
+      label: '% Pagado',
+      value:
+        totalSolicitado > 0
+          ? `${((totalPagado / totalSolicitado) * 100).toFixed(1)}%`
+          : '—',
+      sub: 'del solicitado',
+      color: 'text-gray-700',
+      bg: 'bg-gray-50',
     },
   ];
 
@@ -62,6 +70,7 @@ export default function KPICards({ rows }: Props) {
           <p className={`text-2xl font-bold ${card.color} leading-tight`}>
             {card.value}
           </p>
+          <p className="text-xs text-gray-400 mt-1">{card.sub}</p>
         </div>
       ))}
     </div>

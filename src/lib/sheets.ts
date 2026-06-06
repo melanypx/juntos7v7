@@ -79,7 +79,17 @@ export async function getSheetData(): Promise<SheetRow[]> {
 
 /**
  * Lee la hoja PRESUPUESTO y devuelve las líneas que tienen monto asignado.
- * Columnas: A=código(3-niveles), E=sub-cuenta, F=descripción, G=Subtotal CLP
+ * Columnas:
+ *   A = Código (3 niveles)
+ *   D = Categoría Topsheet
+ *   E = Sub-cuenta
+ *   F = Descripción ítem
+ *   G = Subtotal CLP
+ *   H = Fringe CLP
+ *   I = Total c/Fringe CLP  ← usamos esta como presupuesto final
+ *
+ * Además captura la línea especial "(+) CONTINGENCIA (XXX)" del final
+ * y la incluye como su propia categoría top-level.
  */
 export async function getBudgetData(): Promise<BudgetLine[]> {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON!);
@@ -90,7 +100,7 @@ export async function getBudgetData(): Promise<BudgetLine[]> {
   const sheets = google.sheets({ version: 'v4', auth });
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID!,
-    range: 'PRESUPUESTO!A:G',
+    range: 'PRESUPUESTO!A:I',
   });
 
   const rows = res.data.values ?? [];
@@ -98,14 +108,43 @@ export async function getBudgetData(): Promise<BudgetLine[]> {
 
   for (const row of rows.slice(1)) {
     const codigo = (row[0] ?? '').trim();
-    // Skip totals row or rows without valid 3-level codes
-    if (!codigo || !codigo.match(/^\d{3}-\d{2}/)) continue;
+    if (!codigo) continue;
+
+    // Caso especial: línea de contingencia "(+) CONTINGENCIA (030)"
+    // o similar al final de la hoja
+    const contMatch = codigo.match(/^\(\+\)\s*(.+?)\s*\((\d{3})\)$/);
+    if (contMatch) {
+      const [, label, codeNum] = contMatch;
+      const totalRaw = (row[8] ?? row[6] ?? '').trim();
+      const monto = parseMonto(totalRaw);
+      if (monto > 0) {
+        const name = label.toUpperCase().trim();
+        result.push({
+          codigo: codeNum,
+          descripcion: name,
+          categoria: name,
+          subcuenta: '',
+          presupuesto: monto,
+        });
+      }
+      continue;
+    }
+
+    // Líneas normales: requieren código de 3 niveles tipo "XXX-XX..."
+    if (!codigo.match(/^\d{3}-\d{2}/)) continue;
+
+    // Preferimos Total c/Fringe (col I); si no existe, caemos al Subtotal (col G)
+    const totalCFringeRaw = (row[8] ?? '').trim();
     const subtotalRaw = (row[6] ?? '').trim();
-    if (!subtotalRaw || subtotalRaw === '-') continue;
-    const presupuesto = parseMonto(subtotalRaw);
+    const useTotal =
+      totalCFringeRaw && totalCFringeRaw !== '-' ? totalCFringeRaw : subtotalRaw;
+    if (!useTotal || useTotal === '-') continue;
+
+    const presupuesto = parseMonto(useTotal);
     if (presupuesto === 0) continue;
-    const categoria   = (row[3] ?? '').trim();
-    const subcuenta   = (row[4] ?? '').trim();
+
+    const categoria = (row[3] ?? '').trim();
+    const subcuenta = (row[4] ?? '').trim();
     const descripcion = (row[5] ?? '').trim();
     result.push({ codigo, descripcion, categoria, subcuenta, presupuesto });
   }
